@@ -24,7 +24,7 @@ A multi-track looper audio plugin built with [JUCE](https://juce.com/), availabl
 
 ## Screenshots
 
-![SimpleLooper UI](screenshot.png)
+![SimpleLooper UI](screenshot.jpg)
 
 ## Building
 
