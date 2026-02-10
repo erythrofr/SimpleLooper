@@ -118,6 +118,7 @@ private:
     std::atomic<float>* mParamResample[NUM_TRACKS] = {};
     std::atomic<float>* mParamBounce = nullptr;
     std::atomic<float>* mParamReset = nullptr;
+    std::atomic<float>* mParamMidiSyncChannel = nullptr;
 
     // Previous param states for edge detection
     bool mPrevRecPlay[NUM_TRACKS] = {};
@@ -148,6 +149,7 @@ private:
     // --- MIDI Clock output (24 PPQN) ---
     double mMidiClockAccumulator = 0.0; // fractional sample position for next tick
     bool mMidiClockRunning = false;
+    int mMidiPulseNote = 36; // C1
 
     // ---------------------------
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleLooperAudioProcessor)
