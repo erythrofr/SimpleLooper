@@ -30,6 +30,11 @@ private:
 
     juce::Label bpmLabel;
     juce::Label stateLabel;
+    juce::Label midiOutLabel;
+    juce::ComboBox midiOutSelector;
+    juce::TextButton refreshMidiOutButton { "↻" };
+
+    void refreshMidiOutputList();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleLooperAudioProcessorEditor)
 };

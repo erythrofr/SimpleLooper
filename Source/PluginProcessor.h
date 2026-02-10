@@ -67,6 +67,10 @@ public:
     int getGlobalPlaybackPosition() const { return mGlobalPlaybackPosition; }
     juce::int64 getGlobalTotalSamples() const { return mGlobalTotalSamples.load(); }
 
+    juce::StringArray getAvailableMidiOutputNames() const;
+    juce::String getSelectedMidiOutputName() const;
+    void setSelectedMidiOutputName(const juce::String& deviceName);
+
     // Commands
     void resetAll();
     void bounceBack();
@@ -148,6 +152,11 @@ private:
     // --- MIDI Clock output (24 PPQN) ---
     double mMidiClockAccumulator = 0.0; // fractional sample position for next tick
     bool mMidiClockRunning = false;
+
+    // Optional direct MIDI output (system device, e.g. LoopMIDI)
+    mutable juce::CriticalSection mDirectMidiOutputLock;
+    std::unique_ptr<juce::MidiOutput> mDirectMidiOutput;
+    juce::String mSelectedMidiOutputName;
 
     // ---------------------------
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SimpleLooperAudioProcessor)

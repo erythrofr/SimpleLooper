@@ -67,12 +67,55 @@ SimpleLooperAudioProcessor::SimpleLooperAudioProcessor()
         mParamOutSelect[i] = apvts.getRawParameterValue("out_select_" + idx);
         mParamResample[i]  = apvts.getRawParameterValue("resample_" + idx);
     }
-    mParamBounce    = apvts.getRawParameterValue("bounce_back");
-    mParamReset     = apvts.getRawParameterValue("reset_all");
+    mParamBounce          = apvts.getRawParameterValue("bounce_back");
+    mParamReset           = apvts.getRawParameterValue("reset_all");
 }
 
 SimpleLooperAudioProcessor::~SimpleLooperAudioProcessor()
 {
+    const juce::ScopedLock sl(mDirectMidiOutputLock);
+    mDirectMidiOutput.reset();
+}
+
+juce::StringArray SimpleLooperAudioProcessor::getAvailableMidiOutputNames() const
+{
+    juce::StringArray names;
+    for (const auto& d : juce::MidiOutput::getAvailableDevices())
+        names.add(d.name);
+    return names;
+}
+
+juce::String SimpleLooperAudioProcessor::getSelectedMidiOutputName() const
+{
+    const juce::ScopedLock sl(mDirectMidiOutputLock);
+    return mSelectedMidiOutputName;
+}
+
+void SimpleLooperAudioProcessor::setSelectedMidiOutputName(const juce::String& deviceName)
+{
+    auto devices = juce::MidiOutput::getAvailableDevices();
+
+    juce::String identifierToOpen;
+    juce::String normalizedName = deviceName.trim();
+    if (!normalizedName.isEmpty() && normalizedName != "Host MIDI Output")
+    {
+        for (const auto& d : devices)
+        {
+            if (d.name == normalizedName)
+            {
+                identifierToOpen = d.identifier;
+                break;
+            }
+        }
+    }
+
+    std::unique_ptr<juce::MidiOutput> newOutput;
+    if (!identifierToOpen.isEmpty())
+        newOutput = juce::MidiOutput::openDevice(identifierToOpen);
+
+    const juce::ScopedLock sl(mDirectMidiOutputLock);
+    mDirectMidiOutput = std::move(newOutput);
+    mSelectedMidiOutputName = normalizedName;
 }
 
 //==============================================================================
@@ -400,13 +443,22 @@ void SimpleLooperAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, 
     executePendingOperations();
 
     // 6. Output MIDI Clock (24 PPQN) based on detected BPM
+    auto sendToSelectedDirectPort = [this](const juce::MidiMessage& msg)
+    {
+        const juce::ScopedLock sl(mDirectMidiOutputLock);
+        if (mDirectMidiOutput != nullptr)
+            mDirectMidiOutput->sendMessageNow(msg);
+    };
+
     double bpm = mBpm.load();
     if (bpm > 10.0 && masterLength > 0 && !isFirstLoopPhase)
     {
         if (!mMidiClockRunning)
         {
             // Send MIDI Start
-            midiMessages.addEvent(juce::MidiMessage(0xFA), 0);
+            auto startMsg = juce::MidiMessage(0xFA);
+            midiMessages.addEvent(startMsg, 0);
+            sendToSelectedDirectPort(startMsg);
             mMidiClockRunning = true;
             mMidiClockAccumulator = 0.0;
         }
@@ -418,7 +470,11 @@ void SimpleLooperAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, 
         {
             int tickPos = static_cast<int>(mMidiClockAccumulator);
             if (tickPos >= numSamples) break;
-            midiMessages.addEvent(juce::MidiMessage(0xF8), tickPos);
+
+            auto tickMsg = juce::MidiMessage(0xF8);
+            midiMessages.addEvent(tickMsg, tickPos);
+            sendToSelectedDirectPort(tickMsg);
+
             mMidiClockAccumulator += samplesPerTick;
         }
         mMidiClockAccumulator -= (double)numSamples;
@@ -426,7 +482,9 @@ void SimpleLooperAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, 
     else if (mMidiClockRunning)
     {
         // Send MIDI Stop
-        midiMessages.addEvent(juce::MidiMessage(0xFC), 0);
+        auto stopMsg = juce::MidiMessage(0xFC);
+        midiMessages.addEvent(stopMsg, 0);
+        sendToSelectedDirectPort(stopMsg);
         mMidiClockRunning = false;
         mMidiClockAccumulator = 0.0;
     }

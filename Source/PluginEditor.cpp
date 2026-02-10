@@ -47,6 +47,25 @@ SimpleLooperAudioProcessorEditor::SimpleLooperAudioProcessorEditor (SimpleLooper
     stateLabel.setColour(juce::Label::textColourId, Colours_::textDim);
     stateLabel.setFont(juce::FontOptions(12.0f));
 
+    addAndMakeVisible(midiOutLabel);
+    midiOutLabel.setText("MIDI OUT", juce::dontSendNotification);
+    midiOutLabel.setColour(juce::Label::textColourId, Colours_::textDim);
+    midiOutLabel.setFont(juce::FontOptions(11.0f));
+
+    addAndMakeVisible(midiOutSelector);
+    midiOutSelector.onChange = [this]
+    {
+        audioProcessor.setSelectedMidiOutputName(midiOutSelector.getText());
+    };
+
+    addAndMakeVisible(refreshMidiOutButton);
+    refreshMidiOutButton.setColour(juce::TextButton::buttonColourId, Colours_::surfaceLight);
+    refreshMidiOutButton.setColour(juce::TextButton::textColourOnId, Colours_::textPrimary);
+    refreshMidiOutButton.setColour(juce::TextButton::textColourOffId, Colours_::textPrimary);
+    refreshMidiOutButton.onClick = [this] { refreshMidiOutputList(); };
+
+    refreshMidiOutputList();
+
     setSize(720, 680);
     startTimerHz(30);
 }
@@ -92,15 +111,21 @@ void SimpleLooperAudioProcessorEditor::resized()
 
     // Header bar
     auto header = area.removeFromTop(48);
-    auto headerRight = header.removeFromRight(200).reduced(8);
+    auto headerRight = header.removeFromRight(460).reduced(8);
     resetButton.setBounds(headerRight.removeFromRight(70));
     headerRight.removeFromRight(4);
     bounceButton.setBounds(headerRight.removeFromRight(70));
+    headerRight.removeFromRight(10);
+    refreshMidiOutButton.setBounds(headerRight.removeFromRight(28));
+    headerRight.removeFromRight(6);
+    midiOutSelector.setBounds(headerRight.removeFromRight(180));
+    headerRight.removeFromRight(6);
+    midiOutLabel.setBounds(headerRight.removeFromRight(64));
 
     auto headerLeft = header.reduced(14, 0);
     headerLeft.removeFromLeft(180); // skip title space
     bpmLabel.setBounds(headerLeft.removeFromLeft(100));
-    stateLabel.setBounds(headerLeft.removeFromLeft(180));
+    stateLabel.setBounds(headerLeft.removeFromLeft(200));
 
     area.removeFromTop(4);
 
@@ -113,4 +138,26 @@ void SimpleLooperAudioProcessorEditor::resized()
     {
         comp->setBounds(tracksArea.removeFromTop(trackH).reduced(0, 2));
     }
+}
+
+
+void SimpleLooperAudioProcessorEditor::refreshMidiOutputList()
+{
+    auto current = audioProcessor.getSelectedMidiOutputName();
+    auto names = audioProcessor.getAvailableMidiOutputNames();
+
+    midiOutSelector.clear(juce::dontSendNotification);
+    midiOutSelector.addItem("Host MIDI Output", 1);
+
+    int itemId = 2;
+    int selectedId = 1;
+    for (const auto& n : names)
+    {
+        midiOutSelector.addItem(n, itemId);
+        if (n == current)
+            selectedId = itemId;
+        ++itemId;
+    }
+
+    midiOutSelector.setSelectedId(selectedId, juce::dontSendNotification);
 }
