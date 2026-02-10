@@ -67,8 +67,9 @@ SimpleLooperAudioProcessor::SimpleLooperAudioProcessor()
         mParamOutSelect[i] = apvts.getRawParameterValue("out_select_" + idx);
         mParamResample[i]  = apvts.getRawParameterValue("resample_" + idx);
     }
-    mParamBounce    = apvts.getRawParameterValue("bounce_back");
-    mParamReset     = apvts.getRawParameterValue("reset_all");
+    mParamBounce          = apvts.getRawParameterValue("bounce_back");
+    mParamReset           = apvts.getRawParameterValue("reset_all");
+    mParamMidiSyncChannel = apvts.getRawParameterValue("midi_sync_channel");
 }
 
 SimpleLooperAudioProcessor::~SimpleLooperAudioProcessor()
@@ -399,14 +400,21 @@ void SimpleLooperAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, 
     // 5. Execute deferred heavy operations (bounce, afterloop)
     executePendingOperations();
 
-    // 6. Output MIDI Clock (24 PPQN) based on detected BPM
+    // 6. Output MIDI Clock (24 PPQN) based on detected BPM + optional MIDI pulse on selected channel
     double bpm = mBpm.load();
     if (bpm > 10.0 && masterLength > 0 && !isFirstLoopPhase)
     {
+        int syncChannel = 1;
+        if (mParamMidiSyncChannel != nullptr)
+            syncChannel = juce::jlimit(1, 16, juce::roundToInt(mParamMidiSyncChannel->load()) + 1);
+
         if (!mMidiClockRunning)
         {
             // Send MIDI Start
             midiMessages.addEvent(juce::MidiMessage(0xFA), 0);
+            // Optional pulse to help routing/monitoring on virtual MIDI tracks
+            midiMessages.addEvent(juce::MidiMessage::noteOn(syncChannel, mMidiPulseNote, (juce::uint8)1), 0);
+            midiMessages.addEvent(juce::MidiMessage::noteOff(syncChannel, mMidiPulseNote), juce::jmin(4, buffer.getNumSamples() - 1));
             mMidiClockRunning = true;
             mMidiClockAccumulator = 0.0;
         }
@@ -419,6 +427,11 @@ void SimpleLooperAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, 
             int tickPos = static_cast<int>(mMidiClockAccumulator);
             if (tickPos >= numSamples) break;
             midiMessages.addEvent(juce::MidiMessage(0xF8), tickPos);
+            // Also mirror each clock tick as a very short note pulse on the selected MIDI channel.
+            // Some hosts/devices route channel messages more reliably than real-time MIDI clock.
+            midiMessages.addEvent(juce::MidiMessage::noteOn(syncChannel, mMidiPulseNote, (juce::uint8)1), tickPos);
+            int offPos = juce::jmin(numSamples - 1, tickPos + 1);
+            midiMessages.addEvent(juce::MidiMessage::noteOff(syncChannel, mMidiPulseNote), offPos);
             mMidiClockAccumulator += samplesPerTick;
         }
         mMidiClockAccumulator -= (double)numSamples;
@@ -556,6 +569,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout SimpleLooperAudioProcessor::
         juce::ParameterID("bounce_back", 1), "Bounce Back", false));
     layout.add(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID("reset_all", 1), "Reset All", false));
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID("midi_sync_channel", 1), "MIDI Sync Channel",
+        juce::StringArray{
+            "CH 1", "CH 2", "CH 3", "CH 4", "CH 5", "CH 6", "CH 7", "CH 8",
+            "CH 9", "CH 10", "CH 11", "CH 12", "CH 13", "CH 14", "CH 15", "CH 16"
+        },
+        0));
 
     return layout;
 }

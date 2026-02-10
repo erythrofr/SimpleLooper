@@ -47,6 +47,18 @@ SimpleLooperAudioProcessorEditor::SimpleLooperAudioProcessorEditor (SimpleLooper
     stateLabel.setColour(juce::Label::textColourId, Colours_::textDim);
     stateLabel.setFont(juce::FontOptions(12.0f));
 
+    addAndMakeVisible(midiSyncLabel);
+    midiSyncLabel.setText("MIDI SYNC", juce::dontSendNotification);
+    midiSyncLabel.setColour(juce::Label::textColourId, Colours_::textDim);
+    midiSyncLabel.setFont(juce::FontOptions(11.0f));
+
+    addAndMakeVisible(midiSyncChannelSelector);
+    for (int ch = 1; ch <= 16; ++ch)
+        midiSyncChannelSelector.addItem("CH " + juce::String(ch), ch);
+
+    mMidiSyncChannelAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        audioProcessor.apvts, "midi_sync_channel", midiSyncChannelSelector);
+
     setSize(720, 680);
     startTimerHz(30);
 }
@@ -92,15 +104,19 @@ void SimpleLooperAudioProcessorEditor::resized()
 
     // Header bar
     auto header = area.removeFromTop(48);
-    auto headerRight = header.removeFromRight(200).reduced(8);
+    auto headerRight = header.removeFromRight(360).reduced(8);
     resetButton.setBounds(headerRight.removeFromRight(70));
     headerRight.removeFromRight(4);
     bounceButton.setBounds(headerRight.removeFromRight(70));
+    headerRight.removeFromRight(10);
+    midiSyncChannelSelector.setBounds(headerRight.removeFromRight(76));
+    headerRight.removeFromRight(6);
+    midiSyncLabel.setBounds(headerRight.removeFromRight(70));
 
     auto headerLeft = header.reduced(14, 0);
     headerLeft.removeFromLeft(180); // skip title space
     bpmLabel.setBounds(headerLeft.removeFromLeft(100));
-    stateLabel.setBounds(headerLeft.removeFromLeft(180));
+    stateLabel.setBounds(headerLeft.removeFromLeft(200));
 
     area.removeFromTop(4);
 
